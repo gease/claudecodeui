@@ -71,7 +71,8 @@
     "joinCommunity": "Join Community",
     "reportIssue": "Report Issue",
     "starOnGithub": "Star on GitHub",
-    "logout": "Logout"
+    "logout": "Logout",
+    "createUser": "Create User"
   },
   "branding": {
     "openSource": "Open Source"
