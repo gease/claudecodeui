@@ -8,10 +8,17 @@ export type AuthUser = {
 
 export type AuthActionResult = { success: true } | { success: false; error: string };
 
+/** Shape the global Express error middleware serializes AppError into. */
+export type ApiErrorDetail = {
+  code?: string;
+  message?: string;
+  details?: unknown;
+};
+
 export type AuthSessionPayload = {
   token?: string;
   user?: AuthUser;
-  error?: string;
+  error?: string | ApiErrorDetail;
   message?: string;
 };
 
@@ -28,7 +35,7 @@ export type OnboardingStatusPayload = {
 };
 
 export type ApiErrorPayload = {
-  error?: string;
+  error?: string | ApiErrorDetail;
   message?: string;
 };
 
