@@ -267,6 +267,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = useCallback(() => {
     // JWT logout is client-side: the server endpoint does not maintain a
     // revocation list, so clearing the session is the complete operation.
+    // The backend call is fired for completeness but not awaited, and its
+    // failure is silently ignored to avoid blocking the local sign-out.
+    void api.auth.logout().catch(() => {});
     clearSession();
   }, [clearSession]);
 
