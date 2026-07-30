@@ -1,14 +1,11 @@
 import { useCallback, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
 import MainContent from '../main-content/view/MainContent';
 import CommandPalette from '../command-palette/CommandPalette';
 import { QuickSettingsPanel } from '../quick-settings-panel';
-import { useWebSocket } from '../../contexts/WebSocketContext';
 import { PaletteOpsProvider, usePaletteOpsRegister } from '../../contexts/PaletteOpsContext';
-import { useDeviceSettings } from '../../hooks/useDeviceSettings';
-import { useSessionProtection } from '../../hooks/useSessionProtection';
-import { useProjectsState } from '../../hooks/useProjectsState';
+import { useAppShellState } from '../../hooks/useAppShellState';
 import { useQueuedMessageAutoSend } from '../../hooks/useQueuedMessageAutoSend';
 import { api } from '../../utils/api';
 
@@ -49,19 +46,17 @@ export default function AppContent() {
 }
 
 function AppContentInner() {
-  const navigate = useNavigate();
   const { sessionId } = useParams<{ sessionId?: string }>();
-  const { isMobile } = useDeviceSettings({ trackPWA: false });
-  const { ws, sendMessage, subscribe } = useWebSocket();
 
   const {
+    navigate,
+    isMobile,
+    ws,
+    sendMessage,
     processingSessions,
     markSessionProcessing,
     markSessionIdle,
     syncProcessingSessions,
-  } = useSessionProtection();
-
-  const {
     selectedProject,
     selectedSession,
     activeTab,
@@ -78,13 +73,7 @@ function AppContentInner() {
     sidebarSharedProps,
     handleNewSession,
     handleProjectSelect,
-  } = useProjectsState({
-    sessionId,
-    navigate,
-    subscribe,
-    isMobile,
-    activeSessions: processingSessions,
-  });
+  } = useAppShellState({ sessionId });
 
   // Queued messages for sessions that finish while another session (or none)
   // is being viewed are sent from here; the viewed session's composer handles
