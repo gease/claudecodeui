@@ -12,6 +12,7 @@ type AuthenticatedRequest = express.Request & { user?: unknown };
 export function createAuthRouter(
   service: ReturnType<typeof createAuthService>,
   authenticateToken: RequestHandler,
+  getUserFromToken: (req: express.Request) => unknown,
 ): express.Router {
   const router = express.Router();
 
@@ -26,7 +27,10 @@ export function createAuthRouter(
   router.post('/register', async (req, res, next) => {
     try {
       const body = req.body as { username?: unknown; password?: unknown };
-      res.json(await service.register(body.username, body.password));
+      // A logged-in primary user (id 1) may create an additional account;
+      // an absent/invalid token falls back to the pre-login bootstrap flow.
+      const requestingUser = getUserFromToken(req);
+      res.json(await service.register(body.username, body.password, requestingUser));
     } catch (error) {
       next(error);
     }

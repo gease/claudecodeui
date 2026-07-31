@@ -48,6 +48,8 @@ export type AuthContextValue = {
   error: string | null;
   login: (username: string, password: string) => Promise<AuthActionResult>;
   register: (username: string, password: string) => Promise<AuthActionResult>;
+  /** Creates an additional account without touching the caller's own session. */
+  createUser: (username: string, password: string) => Promise<AuthActionResult>;
   logout: () => void;
   refreshOnboardingStatus: () => Promise<void>;
 };

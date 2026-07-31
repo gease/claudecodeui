@@ -102,6 +102,38 @@ const authenticateToken = async (req, res, next) => {
   }
 };
 
+// Non-blocking token lookup: returns the requesting user if a valid token is
+// present, or null otherwise. Unlike authenticateToken, never rejects the
+// request — for routes that behave differently depending on whether the
+// caller happens to be authenticated (e.g. /register, which also accepts an
+// authenticated primary user creating an additional account).
+const getUserFromToken = (req) => {
+  if (IS_PLATFORM) {
+    try {
+      return userDb.getFirstUser() ?? null;
+    } catch (error) {
+      console.error('Platform mode error:', error);
+      return null;
+    }
+  }
+
+  const authHeader = req.headers['authorization'];
+  let token = authHeader && authHeader.split(' ')[1];
+  if (!token && req.query.token) {
+    token = req.query.token;
+  }
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    return userDb.getUserById(decoded.userId) ?? null;
+  } catch {
+    return null;
+  }
+};
+
 // Generate JWT token
 const generateToken = (user) => {
   return jwt.sign(
@@ -157,6 +189,7 @@ const authenticateWebSocket = (token) => {
 export {
   validateApiKey,
   authenticateToken,
+  getUserFromToken,
   generateToken,
   authenticateWebSocket,
   JWT_SECRET

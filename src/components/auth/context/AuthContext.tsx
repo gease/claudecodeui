@@ -32,6 +32,25 @@ const clearStoredToken = () => {
   localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
 };
 
+type RegistrationResult =
+  | { success: true; user: AuthUser; token: string }
+  | { success: false; error: string };
+
+/** Shared by register() and createUser(): call the endpoint and parse the response. */
+async function submitRegistration(username: string, password: string): Promise<RegistrationResult> {
+  const response = await api.auth.register(username, password);
+  const payload = await parseJsonSafely<AuthSessionPayload>(response);
+
+  if (!response.ok || !payload?.token || !payload.user) {
+    return {
+      success: false,
+      error: resolveApiErrorMessage(payload, AUTH_ERROR_MESSAGES.registrationFailed),
+    };
+  }
+
+  return { success: true, user: payload.user, token: payload.token };
+}
+
 export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
   if (!context) {
@@ -242,16 +261,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     async (username, password) => {
       try {
         setError(null);
-        const response = await api.auth.register(username, password);
-        const payload = await parseJsonSafely<AuthSessionPayload>(response);
-
-        if (!response.ok || !payload?.token || !payload.user) {
-          const message = resolveApiErrorMessage(payload, AUTH_ERROR_MESSAGES.registrationFailed);
-          setError(message);
-          return { success: false, error: message };
+        const result = await submitRegistration(username, password);
+        if (!result.success) {
+          setError(result.error);
+          return result;
         }
 
-        setSession(payload.user, payload.token);
+        setSession(result.user, result.token);
         setNeedsSetup(false);
         await checkOnboardingStatus();
         return { success: true };
@@ -262,6 +278,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     },
     [checkOnboardingStatus, setSession],
+  );
+
+  const createUser = useCallback<AuthContextValue['createUser']>(
+    async (username, password) => {
+      try {
+        const result = await submitRegistration(username, password);
+        return result.success ? { success: true } : result;
+      } catch (caughtError) {
+        console.error('Create user error:', caughtError);
+        return { success: false, error: AUTH_ERROR_MESSAGES.networkError };
+      }
+    },
+    [],
   );
 
   const logout = useCallback(() => {
@@ -283,10 +312,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       error,
       login,
       register,
+      createUser,
       logout,
       refreshOnboardingStatus,
     }),
     [
+      createUser,
       error,
       hasCompletedOnboarding,
       isLoading,

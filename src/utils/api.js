@@ -128,9 +128,12 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     }),
-    register: (username, password) => fetch('/api/auth/register', {
+    // authenticatedFetch attaches the caller's token when one is stored, so a
+    // logged-in primary user creating an additional account is recognized by
+    // the backend; pre-login bootstrap registration has no stored token and
+    // is unaffected.
+    register: (username, password) => authenticatedFetch('/api/auth/register', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     }),
     refresh: () => authenticatedFetch('/api/auth/refresh', { method: 'POST' }),

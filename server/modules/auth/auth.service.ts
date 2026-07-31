@@ -24,8 +24,9 @@ type AuthDependencies = {
   generateToken(user: AuthUser): string;
 };
 
-function numericUserId(userId: number | bigint): number {
-  return Number(userId);
+/** The primary user's account creates additional accounts; everyone else is bootstrap-only. */
+function isPrimaryUser(requestingUser: unknown): boolean {
+  return Number((requestingUser as { id?: unknown } | null)?.id) === 1;
 }
 
 function isUniqueConstraintError(error: unknown): boolean {
@@ -48,7 +49,7 @@ export function createAuthService(dependencies: AuthDependencies) {
       };
     },
 
-    async register(usernameInput: unknown, passwordInput: unknown) {
+    async register(usernameInput: unknown, passwordInput: unknown, requestingUser?: unknown) {
       const username = typeof usernameInput === 'string' ? usernameInput : '';
       const password = typeof passwordInput === 'string' ? passwordInput : '';
 
@@ -67,7 +68,7 @@ export function createAuthService(dependencies: AuthDependencies) {
 
       dependencies.transaction.begin();
       try {
-        if (dependencies.users.hasUsers()) {
+        if (dependencies.users.hasUsers() && !isPrimaryUser(requestingUser)) {
           throw new AppError('User already exists. This is a single-user system.', {
             code: 'AUTH_USER_ALREADY_CONFIGURED',
             statusCode: 403,
@@ -78,7 +79,7 @@ export function createAuthService(dependencies: AuthDependencies) {
         const user = dependencies.users.createUser(username, passwordHash);
         const token = dependencies.generateToken(user);
         dependencies.transaction.commit();
-        dependencies.users.updateLastLogin(numericUserId(user.id));
+        dependencies.users.updateLastLogin(Number(user.id));
 
         return {
           success: true,
@@ -118,7 +119,7 @@ export function createAuthService(dependencies: AuthDependencies) {
         });
       }
 
-      dependencies.users.updateLastLogin(numericUserId(user.id));
+      dependencies.users.updateLastLogin(Number(user.id));
       return {
         success: true,
         user: { id: user.id, username: user.username },
@@ -136,7 +137,6 @@ export function createAuthService(dependencies: AuthDependencies) {
         || user === null
         || !('id' in user)
         || !('username' in user)
-        || (typeof user.id !== 'number' && typeof user.id !== 'bigint')
         || typeof user.username !== 'string'
       ) {
         throw new AppError('Authenticated user is required', {

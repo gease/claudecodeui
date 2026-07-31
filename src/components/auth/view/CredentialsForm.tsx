@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Loader2, Lock, ShieldCheck, User } from 'lucide-react';
+import { CheckCircle2, Loader2, Lock, ShieldCheck, User } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 
@@ -17,6 +17,17 @@ const initialState: CredentialsFormState = {
   username: '',
   password: '',
   confirmPassword: '',
+};
+
+type CredentialsFormProps = {
+  /**
+   * 'setup' (default) signs the caller into the newly created account, as
+   * used by the pre-login bootstrap screen. 'create-user' is for the primary
+   * user creating an additional account from a page they're already signed
+   * into — it must not touch their own session, so it stays on the form and
+   * shows a success message instead.
+   */
+  variant?: 'setup' | 'create-user';
 };
 
 /**
@@ -53,11 +64,12 @@ function validateCredentialsForm(formState: CredentialsFormState): string | null
  * managers recognise this as a registration flow and offer to save the new
  * credentials after submission.
  */
-export default function CredentialsForm() {
-  const { register } = useAuth();
+export default function CredentialsForm({ variant = 'setup' }: CredentialsFormProps) {
+  const { register, createUser } = useAuth();
 
   const [formState, setFormState] = useState<CredentialsFormState>(initialState);
   const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const updateField = useCallback((field: keyof CredentialsFormState, value: string) => {
@@ -68,6 +80,7 @@ export default function CredentialsForm() {
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       setErrorMessage('');
+      setSuccessMessage('');
 
       const validationError = validateCredentialsForm(formState);
       if (validationError) {
@@ -76,13 +89,20 @@ export default function CredentialsForm() {
       }
 
       setIsSubmitting(true);
-      const result = await register(formState.username.trim(), formState.password);
+      const username = formState.username.trim();
+      const result = variant === 'create-user'
+        ? await createUser(username, formState.password)
+        : await register(username, formState.password);
+
       if (!result.success) {
         setErrorMessage(result.error);
+      } else if (variant === 'create-user') {
+        setFormState(initialState);
+        setSuccessMessage(`Account "${username}" created.`);
       }
       setIsSubmitting(false);
     },
-    [formState, register],
+    [createUser, formState, register, variant],
   );
 
   return (
@@ -132,6 +152,16 @@ export default function CredentialsForm() {
 
       <AuthErrorAlert errorMessage={errorMessage} />
 
+      {successMessage && (
+        <div
+          role="status"
+          className="flex items-start gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-emerald-600 dark:text-emerald-400"
+        >
+          <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" />
+          <p className="text-sm leading-relaxed">{successMessage}</p>
+        </div>
+      )}
+
       <button
         type="submit"
         disabled={isSubmitting}
@@ -140,7 +170,7 @@ export default function CredentialsForm() {
         {isSubmitting ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" />
-            Setting up...
+            {variant === 'create-user' ? 'Creating...' : 'Setting up...'}
           </>
         ) : (
           'Create Account'
