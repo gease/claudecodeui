@@ -108,7 +108,11 @@ export const authenticatedFetch = (url, options = {}) => {
     },
   }).then((response) => {
     const refreshedToken = response.headers.get('X-Refreshed-Token');
-    if (refreshedToken) {
+    // Only apply the refresh if this request's session is still the active
+    // one. A request started before a logout or a different login can
+    // resolve afterward; without this check its stale X-Refreshed-Token
+    // would silently overwrite whatever session is active by then.
+    if (refreshedToken && getStoredAuthToken() === token) {
       storeAuthToken(refreshedToken);
     }
     if (response.headers.get('X-Auth-Error')) {
