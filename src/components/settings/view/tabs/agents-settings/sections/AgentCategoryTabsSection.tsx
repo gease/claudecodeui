@@ -33,6 +33,7 @@ export default function AgentCategoryTabsSection({
             {category === 'skills' && t('tabs.skills', {
               defaultValue: selectedAgent === 'opencode' ? 'Shared Skills' : 'Skills',
             })}
+            {category === 'apiKey' && t('tabs.apiKey', { defaultValue: 'API Key' })}
           </button>
         ))}
       </div>
