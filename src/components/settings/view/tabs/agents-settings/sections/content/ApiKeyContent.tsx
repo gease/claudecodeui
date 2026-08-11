@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+
 import { Button, Input } from '../../../../../../../shared/view/ui';
 import { authenticatedFetch } from '../../../../../../../utils/api';
 import type { AgentProvider } from '../../../../../types/types';
@@ -10,11 +11,24 @@ type ApiKeyContentProps = {
   agent: AgentProvider;
 };
 
-type SaveState = 'idle' | 'saving' | 'success' | 'error';
+// One state machine for the one credential row this component manages: save
+// and remove act on the same resource, so they can't be in flight at once.
+type ActionState =
+  | 'idle'
+  | 'saving'
+  | 'removing'
+  | 'save-success'
+  | 'save-error'
+  | 'remove-success'
+  | 'remove-error';
 
 type CreateCredentialResponse = {
   success?: boolean;
   error?: string;
+};
+
+type DeleteCredentialResponse = {
+  success?: boolean;
 };
 
 // Metadata-only shape: the backend never returns credential_value here, by
@@ -42,7 +56,7 @@ export default function ApiKeyContent({ agent }: ApiKeyContentProps) {
   const { t } = useTranslation('settings');
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
-  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [actionState, setActionState] = useState<ActionState>('idle');
   const [existingCredential, setExistingCredential] = useState<CredentialRow | null>(null);
   const [loadingExisting, setLoadingExisting] = useState(true);
   const agentName = agentDisplayName[agent];
@@ -75,7 +89,7 @@ export default function ApiKeyContent({ agent }: ApiKeyContentProps) {
       return;
     }
 
-    setSaveState('saving');
+    setActionState('saving');
     try {
       const response = await authenticatedFetch('/api/settings/credentials', {
         method: 'POST',
@@ -88,17 +102,44 @@ export default function ApiKeyContent({ agent }: ApiKeyContentProps) {
       const payload = await response.json() as CreateCredentialResponse;
 
       if (!response.ok || !payload.success) {
-        setSaveState('error');
+        setActionState('save-error');
         return;
       }
 
-      setSaveState('success');
+      setActionState('save-success');
       setApiKey('');
       await fetchExistingCredential();
     } catch {
-      setSaveState('error');
+      setActionState('save-error');
     } finally {
-      window.setTimeout(() => setSaveState('idle'), 2000);
+      window.setTimeout(() => setActionState('idle'), 2000);
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!existingCredential) {
+      return;
+    }
+
+    setActionState('removing');
+    try {
+      const response = await authenticatedFetch(
+        `/api/settings/credentials/${existingCredential.id}`,
+        { method: 'DELETE' },
+      );
+      const payload = await response.json() as DeleteCredentialResponse;
+
+      if (!response.ok || !payload.success) {
+        setActionState('remove-error');
+        return;
+      }
+
+      setActionState('remove-success');
+      setExistingCredential(null);
+    } catch {
+      setActionState('remove-error');
+    } finally {
+      window.setTimeout(() => setActionState('idle'), 2000);
     }
   };
 
@@ -164,22 +205,44 @@ export default function ApiKeyContent({ agent }: ApiKeyContentProps) {
         <Button
           type="button"
           size="sm"
-          disabled={!apiKey.trim() || saveState === 'saving'}
+          disabled={!apiKey.trim() || actionState === 'saving' || actionState === 'removing'}
           onClick={() => void handleSave()}
         >
-          {saveState === 'saving'
+          {actionState === 'saving'
             ? t('agents.apiKey.saving', { defaultValue: 'Saving...' })
             : t('agents.apiKey.save', { defaultValue: 'Save key' })}
         </Button>
 
-        {saveState === 'success' && (
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          disabled={!existingCredential || loadingExisting || actionState === 'saving' || actionState === 'removing'}
+          onClick={() => void handleRemove()}
+        >
+          {actionState === 'removing'
+            ? t('agents.apiKey.removing', { defaultValue: 'Removing...' })
+            : t('agents.apiKey.remove', { defaultValue: 'Remove key' })}
+        </Button>
+
+        {actionState === 'save-success' && (
           <span className="text-sm text-green-600 dark:text-green-400">
             {t('agents.apiKey.saveSuccess', { defaultValue: 'Saved' })}
           </span>
         )}
-        {saveState === 'error' && (
+        {actionState === 'save-error' && (
           <span className="text-sm text-red-600 dark:text-red-400">
             {t('agents.apiKey.saveError', { defaultValue: 'Failed to save' })}
+          </span>
+        )}
+        {actionState === 'remove-success' && (
+          <span className="text-sm text-green-600 dark:text-green-400">
+            {t('agents.apiKey.removeSuccess', { defaultValue: 'Removed' })}
+          </span>
+        )}
+        {actionState === 'remove-error' && (
+          <span className="text-sm text-red-600 dark:text-red-400">
+            {t('agents.apiKey.removeError', { defaultValue: 'Failed to remove' })}
           </span>
         )}
       </div>
