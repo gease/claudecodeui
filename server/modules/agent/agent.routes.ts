@@ -991,6 +991,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
           sessionId: sessionId || null,
           model: model,
           effort,
+          requestingUserId: req.user.id,
           permissionMode: 'bypassPermissions' // Bypass all permissions for API calls
         }, writer);
 

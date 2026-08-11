@@ -225,6 +225,9 @@ async function handleChatSend(
     sessionId,
     cwd: clientOptions.cwd ?? session.project_path ?? undefined,
     projectPath: session.project_path ?? clientOptions.projectPath,
+    // Lets provider runtimes (currently just Claude) use this user's own
+    // saved API key instead of the server host's shared credential.
+    requestingUserId: userId,
   };
 
   try {

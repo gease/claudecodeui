@@ -26,6 +26,7 @@ import {
 } from '@/shared/image-attachments.js';
 import { CLAUDE_FALLBACK_MODELS } from '@/modules/providers/list/claude/claude-models.provider.js';
 import { resolveClaudeCodeExecutablePath } from '@/shared/claude-cli-path.js';
+import { credentialsDb } from '@/modules/database/index.js';
 import {
   createNotificationEvent,
   notifyRunFailed,
@@ -159,13 +160,29 @@ function matchesToolPermission(entry, toolName, input) {
 }
 
 function mapCliOptionsToSDK(options = {}) {
-  const { providerSessionId, cwd, toolsSettings, permissionMode, effort } = options;
+  const { providerSessionId, cwd, toolsSettings, permissionMode, effort, requestingUserId } = options;
 
   const sdkOptions = {};
 
   // Forward all host env vars (e.g. ANTHROPIC_BASE_URL) to the subprocess.
   // Since SDK 0.2.113, options.env replaces process.env instead of overlaying it.
   sdkOptions.env = { ...process.env };
+
+  // If the requesting app user has saved their own Claude API key (Settings ->
+  // Agents -> API Key), use it instead of whatever credential the server host
+  // itself has configured. Clearing the token fields too ensures the user's
+  // key actually wins — the SDK's own credential resolution would otherwise
+  // prefer a pre-existing ANTHROPIC_AUTH_TOKEN/CLAUDE_CODE_OAUTH_TOKEN over a
+  // freshly forwarded ANTHROPIC_API_KEY.
+  const userId = Number(requestingUserId);
+  if (Number.isFinite(userId) && userId > 0) {
+    const userApiKey = credentialsDb.getActiveCredential(userId, 'claude_api_key');
+    if (userApiKey) {
+      sdkOptions.env.ANTHROPIC_API_KEY = userApiKey;
+      delete sdkOptions.env.ANTHROPIC_AUTH_TOKEN;
+      delete sdkOptions.env.CLAUDE_CODE_OAUTH_TOKEN;
+    }
+  }
 
   // Resolve the executable eagerly on Windows because the SDK uses raw child_process.spawn,
   // which does not reliably follow npm's shell wrappers like cross-spawn does.
