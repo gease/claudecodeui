@@ -10,6 +10,7 @@ import {
 } from '@/shared/image-attachments.js';
 import { notifyRunFailed, notifyRunStopped } from '@/modules/notifications/index.js';
 import { createCompleteMessage, createNormalizedMessage, flattenPromptForWindowsShell, getOpenCodeDatabasePath } from '@/shared/utils.js';
+import { credentialsDb } from '@/modules/database/index.js';
 
 // cross-spawn resolves .cmd shims/PATHEXT on Windows and delegates to
 // child_process.spawn everywhere else.
@@ -134,7 +135,8 @@ async function spawnOpenCode(command, options = {}, ws, context) {
       sessionSummary,
       images,
       files,
-      permissionMode
+      permissionMode,
+      requestingUserId
     } = options;
     // Callers pass the stable app session id; the CLI resumes with the
     // provider-native id recorded on the session row.
@@ -272,6 +274,20 @@ async function spawnOpenCode(command, options = {}, ws, context) {
       }
       const permissionOptions = resolveOpenCodePermissionOptions(permissionMode);
       args.push(...permissionOptions.args);
+
+      // If the requesting app user has saved their own OpenCode API key
+      // (Settings -> Agents -> API Key), use it as ANTHROPIC_API_KEY instead
+      // of the server host's shared credential. OpenCode can run many model
+      // backends behind OPENCODE_ENV_CREDENTIAL_KEYS; this app only collects
+      // one key per user, so it targets Anthropic models specifically.
+      const userCredentialEnv = {};
+      const userId = Number(requestingUserId);
+      if (Number.isFinite(userId) && userId > 0) {
+        const userApiKey = credentialsDb.getActiveCredential(userId, 'opencode_api_key');
+        if (userApiKey) {
+          userCredentialEnv.ANTHROPIC_API_KEY = userApiKey;
+        }
+      }
       const hasAttachments =
         normalizeAttachmentDescriptors(images).length > 0
         || normalizeAttachmentDescriptors(files).length > 0;
@@ -290,7 +306,7 @@ async function spawnOpenCode(command, options = {}, ws, context) {
       opencodeProcess = spawnFunction('opencode', args, {
         cwd: workingDir,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env, ...permissionOptions.env },
+        env: { ...process.env, ...permissionOptions.env, ...userCredentialEnv },
       });
 
       activeOpenCodeProcesses.set(processKey, opencodeProcess);

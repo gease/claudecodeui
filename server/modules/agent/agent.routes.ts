@@ -1014,6 +1014,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
           sessionId: sessionId || null,
           model: model || codexModels.DEFAULT,
           effort,
+          requestingUserId: req.user.id,
           permissionMode: 'bypassPermissions'
         }, writer);
       } else if (provider === 'opencode') {
@@ -1025,6 +1026,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
           sessionId: sessionId || null,
           model: model || opencodeModels.DEFAULT,
           effort,
+          requestingUserId: req.user.id,
           permissionMode: 'bypassPermissions' // Agent runs are non-interactive, like the other providers above
         }, writer);
       }

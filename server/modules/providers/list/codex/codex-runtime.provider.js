@@ -22,6 +22,7 @@ import {
 } from '@/shared/image-attachments.js';
 import { notifyRunFailed, notifyRunStopped } from '@/modules/notifications/index.js';
 import { createCompleteMessage, createNormalizedMessage } from '@/shared/utils.js';
+import { credentialsDb } from '@/modules/database/index.js';
 
 const activeCodexSessions = new Map();
 
@@ -233,7 +234,8 @@ export async function queryCodex(command, options = {}, ws, context) {
     effort,
     images,
     files,
-    permissionMode = 'default'
+    permissionMode = 'default',
+    requestingUserId
   } = options;
 
   // Callers pass the stable app session id; the SDK resumes threads with the
@@ -264,7 +266,20 @@ export async function queryCodex(command, options = {}, ws, context) {
   const sessionKey = () => sessionId || capturedSessionId || null;
 
   try {
-    codex = new Codex();
+    // If the requesting app user has saved their own Codex API key (Settings
+    // -> Agents -> API Key), use it instead of the server host's shared
+    // credential. Otherwise apiKey stays undefined and the SDK falls back to
+    // its own default resolution (OPENAI_API_KEY env var, then ~/.codex/auth.json).
+    const codexOptions = {};
+    const userId = Number(requestingUserId);
+    if (Number.isFinite(userId) && userId > 0) {
+      const userApiKey = credentialsDb.getActiveCredential(userId, 'codex_api_key');
+      if (userApiKey) {
+        codexOptions.apiKey = userApiKey;
+      }
+    }
+
+    codex = new Codex(codexOptions);
 
     const threadOptions = {
       workingDirectory,
