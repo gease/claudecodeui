@@ -53,6 +53,7 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
     setCodexPermissionMode,
     providerAuthStatus,
     openLoginForProvider,
+    isLoginLocked,
     showLoginModal,
     setShowLoginModal,
     loginProvider,
@@ -228,6 +229,7 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
         provider={loginProvider || 'claude'}
         onComplete={handleLoginComplete}
         isAuthenticated={isAuthenticated}
+        isLocked={isLoginLocked}
       />
 
     </div>

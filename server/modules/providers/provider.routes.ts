@@ -1,6 +1,7 @@
 import express, { type Request, type Response } from 'express';
 
 import { providerAuthService } from '@/modules/providers/services/provider-auth.service.js';
+import { providerLoginLockService } from '@/modules/providers/services/provider-login-lock.service.js';
 import { providerCapabilitiesService } from '@/modules/providers/services/provider-capabilities.service.js';
 import { providerMcpService } from '@/modules/providers/services/mcp.service.js';
 import { providerModelsService } from '@/modules/providers/services/provider-models.service.js';
@@ -371,6 +372,18 @@ const parseSessionModelPayload = (payload: unknown): string => {
 
   return model;
 };
+
+router.get(
+  '/login-lock/status',
+  asyncHandler(async (_req: Request, res: Response) => {
+    const lock = providerLoginLockService.getStatus();
+    res.json(createApiSuccessResponse({
+      locked: Boolean(lock),
+      provider: lock?.provider ?? null,
+      userId: lock?.userId ?? null,
+    }));
+  }),
+);
 
 router.get(
   '/:provider/auth/status',

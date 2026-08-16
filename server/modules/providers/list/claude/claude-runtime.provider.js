@@ -181,6 +181,16 @@ function mapCliOptionsToSDK(options = {}) {
       sdkOptions.env.ANTHROPIC_API_KEY = userApiKey;
       delete sdkOptions.env.ANTHROPIC_AUTH_TOKEN;
       delete sdkOptions.env.CLAUDE_CODE_OAUTH_TOKEN;
+    } else {
+      // No manual API key — fall back to a captured interactive-login token
+      // (extracted by credential-file-watcher.service.ts from this user's own
+      // `/login`, since the credentials file itself is shared server-wide).
+      const userOauthToken = credentialsDb.getActiveCredential(userId, 'claude_oauth_token');
+      if (userOauthToken) {
+        sdkOptions.env.ANTHROPIC_AUTH_TOKEN = userOauthToken;
+        delete sdkOptions.env.ANTHROPIC_API_KEY;
+        delete sdkOptions.env.CLAUDE_CODE_OAUTH_TOKEN;
+      }
     }
   }
 

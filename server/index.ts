@@ -11,8 +11,11 @@ import cors from 'cors';
 
 import { AppError, findApplicationRoot, getModuleDirectory, terminalTextStyles } from '@/shared/utils.js';
 import {
+    closeCredentialFileWatcher,
     closeSessionsWatcher,
+    initializeCredentialFileWatcher,
     initializeSessionsWatcher,
+    providerLoginLockService,
     providerRuntimeService,
 } from '@/modules/providers/index.js';
 import { createWebSocketServer } from '@/modules/websocket/index.js';
@@ -112,6 +115,7 @@ const wss = createWebSocketServer(server, {
 
             return null;
         },
+        providerLoginLock: { acquire: providerLoginLockService.acquire },
     },
     getPluginPort,
 });
@@ -363,6 +367,7 @@ async function startServer() {
 
             // Start watching the projects folder for changes
             await initializeSessionsWatcher();
+            await initializeCredentialFileWatcher();
 
             // Start server-side plugin processes for enabled plugins
             startEnabledPluginServers().catch(err => {
@@ -371,6 +376,7 @@ async function startServer() {
         });
 
         await closeSessionsWatcher();
+        await closeCredentialFileWatcher();
         // Clean up plugin processes on shutdown
         const shutdownRuntimeServices = async () => {
             try {

@@ -39,6 +39,38 @@ export const credentialsDb = {
   },
 
   /**
+   * Stores a credential as the sole row for this user+type, atomically
+   * removing any existing rows of that type first. For credential types
+   * where only one value is ever meaningful (provider API keys, the
+   * captured OAuth token) — unlike e.g. GitHub tokens, where a user can
+   * hold several side by side and `createCredential` is the right call.
+   */
+  replaceCredential(
+    userId: number,
+    credentialName: string,
+    credentialType: string,
+    credentialValue: string,
+    description: string | null = null
+  ): CreateCredentialResult {
+    const db = getConnection();
+    const replace = db.transaction(() => {
+      db.prepare('DELETE FROM user_credentials WHERE user_id = ? AND credential_type = ?')
+        .run(userId, credentialType);
+      return db
+        .prepare(
+          'INSERT INTO user_credentials (user_id, credential_name, credential_type, credential_value, description) VALUES (?, ?, ?, ?, ?)'
+        )
+        .run(userId, credentialName, credentialType, credentialValue, description);
+    });
+    const result = replace();
+    return {
+      id: result.lastInsertRowid,
+      credentialName,
+      credentialType,
+    };
+  },
+
+  /**
    * Lists credentials for a user (excluding raw values).
    * Optionally filters by credential type (e.g. 'github_token').
    */

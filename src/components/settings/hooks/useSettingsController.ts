@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { authenticatedFetch } from '../../../utils/api';
 import { setNotificationSoundEnabled } from '../../../utils/notificationSound';
+import { fetchLoginLockStatus } from '../../provider-auth/services/fetchLoginLockStatus';
 import { useProviderAuthStatus } from '../../provider-auth/hooks/useProviderAuthStatus';
 import {
   DEFAULT_CODE_EDITOR_SETTINGS,
@@ -161,6 +162,7 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
 
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginProvider, setLoginProvider] = useState<ActiveLoginProvider>('');
+  const [isLoginLocked, setIsLoginLocked] = useState(false);
   const {
     providerAuthStatus,
     checkProviderAuthStatus,
@@ -225,6 +227,14 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
   const openLoginForProvider = useCallback((provider: AgentProvider) => {
     setLoginProvider(provider);
     setShowLoginModal(true);
+    // The backend lock is the real guarantee (it rejects the shell command
+    // outright); this just decides whether the modal shows a live terminal
+    // or a "try again" message.
+    setIsLoginLocked(false);
+    void (async () => {
+      const lockStatus = await fetchLoginLockStatus();
+      setIsLoginLocked(lockStatus.locked);
+    })();
   }, []);
 
   const handleLoginComplete = useCallback((exitCode: number) => {
@@ -396,6 +406,7 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
     setCodexPermissionMode,
     providerAuthStatus,
     openLoginForProvider,
+    isLoginLocked,
     showLoginModal,
     setShowLoginModal,
     loginProvider,

@@ -10,6 +10,8 @@ type ProviderLoginModalProps = {
   onComplete?: (exitCode: number) => void;
   customCommand?: string;
   isAuthenticated?: boolean;
+  /** Another provider login is already in progress system-wide (the login lock is global, not per-provider). */
+  isLocked?: boolean;
 };
 
 const getProviderCommand = ({
@@ -59,6 +61,7 @@ export default function ProviderLoginModal({
   onComplete,
   customCommand,
   isAuthenticated = false,
+  isLocked = false,
 }: ProviderLoginModalProps) {
   if (!isOpen) {
     return null;
@@ -87,7 +90,15 @@ export default function ProviderLoginModal({
         </div>
 
         <div className="flex-1 overflow-hidden">
-          <StandaloneShell project={DEFAULT_PROJECT_FOR_EMPTY_SHELL} command={command} onComplete={handleComplete} minimal={true} />
+          {isLocked ? (
+            <div className="flex h-full items-center justify-center p-6 text-center">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Another login is in process. Try again in a few seconds.
+              </p>
+            </div>
+          ) : (
+            <StandaloneShell project={DEFAULT_PROJECT_FOR_EMPTY_SHELL} command={command} onComplete={handleComplete} minimal={true} />
+          )}
         </div>
       </div>
     </div>

@@ -5,6 +5,7 @@ import path from 'node:path';
 import pty, { type IPty } from 'node-pty';
 import { WebSocket, type RawData } from 'ws';
 
+import type { LLMProvider } from '@/shared/types.js';
 import { parseIncomingJsonObject } from '@/shared/utils.js';
 
 type ShellIncomingMessage = {
@@ -106,6 +107,18 @@ type ShellWebSocketDependencies = {
     provider: string,
   ) => string | null | undefined;
   spawnPty?: typeof pty.spawn;
+  /**
+   * Injected rather than imported directly: this module (websocket) and the
+   * providers module that owns the lock service must not import each other
+   * directly (cross-module import boundary) — the composition root wires
+   * this in, same as resolveProviderSessionId above.
+   */
+  // Typed as LLMProvider, not narrowed to 'claude' — the lock itself is
+  // already provider-agnostic. Only the Claude call site below exists today;
+  // support for Codex/OpenCode logins going through this same lock is on the way.
+  providerLoginLock?: {
+    acquire: (provider: LLMProvider, userId: number) => boolean;
+  };
 };
 
 /**
@@ -288,7 +301,8 @@ function prioritizeUserNpmGlobalBin(env: NodeJS.ProcessEnv): { key: string; valu
  */
 export function handleShellConnection(
   ws: WebSocket,
-  dependencies: ShellWebSocketDependencies
+  dependencies: ShellWebSocketDependencies,
+  userId: string | number | null = null
 ): void {
   console.log('[INFO] Shell websocket connected');
 
@@ -324,6 +338,12 @@ export function handleShellConnection(
           (initialCommand.includes('setup-token') ||
             initialCommand.includes('cursor-agent login') ||
             initialCommand.includes('auth login'));
+
+        // Interactive `claude /login` specifically — distinct from isLoginCommand
+        // above, which drives unrelated PTY-session-restart logic and doesn't
+        // match this command's text. Only this path touches the login lock.
+        const isClaudeLogin =
+          provider === 'claude' && !!initialCommand && initialCommand.includes('/login');
 
         const commandSuffix =
           isPlainShell && initialCommand
@@ -388,6 +408,22 @@ export function handleShellConnection(
         if (sessionId && !safeSessionIdPattern.test(sessionId)) {
           ws.send(JSON.stringify({ type: 'error', message: 'Invalid session ID' }));
           return;
+        }
+
+        if (isClaudeLogin && dependencies.providerLoginLock) {
+          const numericUserId = Number(userId);
+          if (!Number.isFinite(numericUserId) || numericUserId <= 0) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Login requires an authenticated user.' }));
+            return;
+          }
+
+          if (!dependencies.providerLoginLock.acquire('claude', numericUserId)) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: 'Another login is already in progress. Please wait for it to finish and try again.',
+            }));
+            return;
+          }
         }
 
         const shellCommand = buildShellCommand(data, dependencies);
@@ -499,6 +535,13 @@ export function handleShellConnection(
         });
 
         shellProcess.onExit((exitCode) => {
+          // Login lock release is handled entirely by the credential file
+          // watcher's happy path, plus the lock service's own max-duration
+          // timer as the failsafe for a login that's cancelled, errors out,
+          // or never completes. Nothing here needs to release it — an
+          // exit-triggered release used to race the watcher and win, causing
+          // it to find the lock already gone and silently drop the event.
+
           if (!ptySessionKey) {
             return;
           }
